@@ -1,0 +1,163 @@
+'CR800 Series Datalogger
+
+'For programming tips, copy this address to your browser
+'search window:https://www.campbellsci.com/videos/datalogger-programming
+'To create a different opening program template, type in new
+'instructions and select Template | Save as Default Template
+'date: 2021-11-03
+'program author: Tatu Polvinen / University of Helsinki, Environmental Soil Science
+
+
+'Declare Variables and Units
+Dim Count
+Dim MuxChannelCount
+
+Public BattV
+Public PTemp_C
+Public Redox(5)
+Public Heatflux
+Public Heater
+Public BatterymV
+Public Mult(8)={1,1,1,1,1,1,1,1}
+Public Offs(8)={0,0,0,0,0,0,0,0}
+'Teros 12 sensor
+Public Teros12(5,3)
+Public CCVWC(5)
+Public Temp_T12(5)
+Public EC(5)
+'Teros 21 sensor
+Public Teros21(5,2)
+Public Matric_potential(5)
+Public Temp_T21(5)
+'OTT PLS sensor
+Public Ottpls(2)
+Public Water_level
+Public Temp_ottpls
+
+Units BattV=Volts
+Units PTemp_C=C
+Units Redox=mV
+Units Heatflux=mV
+Units Heater=mV
+Units BatterymV=mV
+Units CCVWC=ADC counts
+Units Temp_T12=C
+Units EC=mS/cm
+Units Matric_potential=kPa
+Units Temp_T21=C
+Units Water_level=m
+Units Temp_ottpls=C
+
+'Define Data Tables
+DataTable(SoilPitDataTable,True,-1)
+  DataInterval(0,5,Min,10)
+  Average(1,BatterymV,FP2,False)
+  Average(1,Heatflux,FP2,False)
+  Average(1,Heater,FP2,False)
+  Average(1,Redox(1),FP2,False)
+  Average(1,Redox(2),FP2,False)
+  Average(1,Redox(3),FP2,False)
+  Average(1,Redox(4),FP2,False)
+  Average(1,Redox(5),FP2,False)
+  Average(1,BattV,FP2,False)
+  Average(1,PTemp_C,FP2,False)
+  Average(1,CCVWC(1),FP2,False)
+  Average(1,Temp_T12(1),FP2,False)
+  Average(1,EC(1),FP2,False)
+  Average(1,CCVWC(2),FP2,False)
+  Average(1,Temp_T12(2),FP2,False)
+  Average(1,EC(2),FP2,False)
+  Average(1,CCVWC(3),FP2,False)
+  Average(1,Temp_T12(3),FP2,False)
+  Average(1,EC(3),FP2,False)
+  Average(1,CCVWC(4),FP2,False)
+  Average(1,Temp_T12(4),FP2,False)
+  Average(1,EC(4),FP2,False)
+  Average(1,CCVWC(5),FP2,False)
+  Average(1,Temp_T12(5),FP2,False)
+  Average(1,EC(5),FP2,False)
+  Average(1,Matric_potential(1),FP2,False)
+  Average(1,Temp_T21(1),FP2,False)
+  Average(1,Matric_potential(2),FP2,False)
+  Average(1,Temp_T21(2),FP2,False)
+  Average(1,Matric_potential(3),FP2,False)
+  Average(1,Temp_T21(3),FP2,False)
+  Average(1,Matric_potential(4),FP2,False)
+  Average(1,Temp_T21(4),FP2,False)
+  Average(1,Matric_potential(5),FP2,False)
+  Average(1,Temp_T21(5),FP2,False)
+  Average(1,Water_level,FP2,False)
+  Average(1,Temp_ottpls,FP2,False)
+EndTable
+
+DataTable(Table2,True,-1)
+  DataInterval(0,1440,Min,10)
+  Minimum(1,BattV,FP2,False,False)
+EndTable
+
+'Main Program
+BeginProg
+  'Main Scan
+  Scan(5,Min,1,0)
+    'Default CR800 Datalogger Battery Voltage measurement 'BattV'
+    Battery(BattV)
+    'Default CR800 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+    PanelTemp(PTemp_C,_50Hz)
+    'Battery voltage measurement
+    VoltDiff(BatterymV,1,mV2500,3,True,0,_50Hz,Mult(1),Offs(1))
+
+    'Turn AM16/32 Multiplexer On
+    PortSet(3,1)
+    Delay(0,150,mSec)
+    MuxChannelCount=1
+
+    SubScan(0,uSec,5)
+      'Switch to next AM16/32 Multiplexer channel
+      PulsePort(2,10000)
+      'Redox measurement
+      VoltDiff(Redox(MuxChannelCount),1,mV2500,1,True,0,_50Hz,Mult(MuxChannelCount+1),Offs(MuxChannelCount+1))
+      'Enable power to SDI-12 Sensors
+      SW12(1)
+      'Allow Teros 12 and 21 SDI-12 Sensors to warmup before polling
+      Delay(0,1000,mSec)
+      'Poll Teros 12 SDI-12 Sensor measurements 'CCVWC()', 'Temp_T12()', and 'EC()'
+      SDI12Recorder(Teros12(MuxChannelCount),1,"0","M!",1,0)
+      'Poll Teros 21 SDI-12 Sensor measurements 'Matric_potential()', and 'Temp_T21()'
+      SDI12Recorder(Teros21(MuxChannelCount),1,"1","M!",1,0)
+      'Disable power to SDI-12 Sensors
+      SW12(0)
+      MuxChannelCount=MuxChannelCount+1
+    NextSubScan
+
+    For Count=1 To 5
+      CCVWC(Count)=Teros12(Count,1)
+      Temp_T12(Count)=Teros12(Count,2)
+      EC(Count)=Teros12(Count,3)
+      Matric_potential(Count)=Teros21(Count,1)
+      Temp_T21(Count)=Teros21(Count,2)
+    Next
+
+    'Switch to next AM16/32 Multiplexer channel
+    PulsePort(2,10000)
+    'Enable power to Hukseflux HFP01SC and OTT PLS sensors
+    SW12(1)
+    'Allow OTT PLS SDI-12 Sensor to warmup before polling
+    Delay(0,1000,mSec)
+    'Poll OTT PLS SDI-12 Sensor measurements 'Water_level', and 'Temp_ott_pls'
+    SDI12Recorder(Ottpls(),1,"A","M!",1,0)
+    'Heat flux measurement
+    VoltDiff(Heatflux,1,mV2500,1,True,0,_50Hz,Mult(7),Offs(7))
+    'Heater measurement
+    VoltDiff(Heater,1,mV2500,2,True,0,_50Hz,Mult(8),Offs(8))
+    'Disable power to Generic SDI-12 Sensor
+    SW12(0)
+    Water_level=Ottpls(1)
+    Temp_ottpls=Ottpls(2)
+    'Turn AM16/32 Multiplexer Off
+    PortSet(3,0)
+    Delay(0,150,mSec)
+    'Call Data Tables and Store Data
+    CallTable SoilPitDataTable
+    CallTable Table2
+  NextScan
+EndProg
