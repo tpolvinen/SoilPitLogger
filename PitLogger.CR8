@@ -121,9 +121,9 @@ BeginProg
       'Allow Teros 12 and 21 SDI-12 Sensors to warmup before polling
       Delay(0,1000,mSec)
       'Poll Teros 12 SDI-12 Sensor measurements 'CCVWC()', 'Temp_T12()', and 'EC()'
-      SDI12Recorder(Teros12(MuxChannelCount),1,"0","M!",1,0)
+      SDI12Recorder(Teros12(MuxChannelCount,1),1,"0","M!",1,0)
       'Poll Teros 21 SDI-12 Sensor measurements 'Matric_potential()', and 'Temp_T21()'
-      SDI12Recorder(Teros21(MuxChannelCount),1,"1","M!",1,0)
+      SDI12Recorder(Teros21(MuxChannelCount,1),1,"1","M!",1,0)
       'Disable power to SDI-12 Sensors
       SW12(0)
       MuxChannelCount=MuxChannelCount+1
