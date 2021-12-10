@@ -1,22 +1,16 @@
 'CR800 Series Datalogger
 'AM16/32 multiplexer in 4x16 mode
-
-'For programming tips, copy this address to your browser
-'search window:https://www.campbellsci.com/videos/datalogger-programming
-'To create a different opening program template, type in new
-'instructions and select Template | Save as Default Template
-'date: 2021-11-03
+'date: 2021-12-10
 'program author: Tatu Polvinen / University of Helsinki, Environmental Soil Science
 
 '*** Contstant Table
 ConstTable (Constants)
   '* Measurement constants
-  Const DATA_INTERVAL       = 5        'Interval for data output to table
-  Const OUTPUT_INTERVAL     = 30       'Online mean output interval in minutes.
-  Const CAL_INTERVAL        = 1440     'HFP01SC insitu calibration interval (minutes).
-  Const END_CAL             = OUTPUT_INTERVAL - 1  'End HFP01SC insitu calibration one minute before the next Output.
-  Const BATT_CHECK_INTERVAL = 1440     'Internal & external battery check interval (minutes).
-  Const SCAN_INTERVAL       = 10       'Main Scan interval (seconds)
+  Const SCAN_INTERVAL      = 10       'Main Scan interval (seconds)
+  Const DATA_INTERVAL      = 5        'Interval for data output to table
+  Const CAL_SEQUENCE       = 30       'Calibration sequence duration/output interval in minutes.
+  Const CAL_INTERVAL       = 60 '1440     'HFP01SC insitu calibration interval (minutes).
+  Const END_CAL_SEQUENCE   = CAL_SEQUENCE - 1  'End HFP01SC insitu calibration one minute before end of calibration sequence time.
 
   'Enter sensor sensitivity and heater resistance values as constants.
   'These values are unique for each sensor and are listed in the product certificate
@@ -34,12 +28,12 @@ Const PLATE_ANALOG_INPUT = 2    'Starting differential analog input channel in C
 ' CR800 AG     HFP Shield #2 (clear)
 
 ' * HFP01SC-05 Heater cable
-Const HEATER_ANALOG_INPUT = 1   'Wired to AM16/32 multiplexer - starting differential analog input channel in CR800 for heater measurements.
-' AM16/32 13H -> CR800 DIFF 1H    Heater resistor signal #1 (yellow)
-' AM16/32 13L -> CR800 DIFF 1L    Heater resistor signal reference #1 (purple)
-' AM16/32 13AG                    Heater shield #1 (clear)
-' AM16/32 14L -> CR800 SW12       Heater power positive #1 (red)
-' AM16/32 14AG                    Heater power negative #1 (black)
+Const HEATER_ANALOG_INPUT = 3   'Starting differential analog input channel in CR800 for heater measurements.
+' CR800 DIFF 3H                  Heater resistor signal #1 (yellow)
+' CR800 DIFF 3L                  Heater resistor signal reference #1 (purple)
+' CR800 AG                       Heater shield #1 (clear)
+' AM16/32 14L -> CR800 SW12      Heater power positive #1 (red)
+' AM16/32 14AG                   Heater power negative #1 (black)
 
 ' * CR800 datalogger to AM16/32 multiplexer
 ' CR800 SW12    AM16/32 COM EL    SDI-12 power positive (red)
@@ -52,7 +46,8 @@ Const HEATER_ANALOG_INPUT = 1   'Wired to AM16/32 multiplexer - starting differe
 '*** Variables and Units
 ' * Used for measurements
 Dim Count
-Dim MuxChannelCount
+Public MuxChannelCount
+Public CalibrationCount
 Public BattV
 Units BattV=Volts
 Public PTemp_C
@@ -61,6 +56,8 @@ Public Redox(5)
 Units Redox=mV
 Public BatterymV
 Units BatterymV=mV
+Public btt_wrnng_flg As Boolean 'Low external battery warning
+Public btt_wrnng_flg_report As String
 Public Mult(8)={1,1,1,1,1,1,1,1}
 Public Offs(8)={0,0,0,0,0,0,0,0}
 ' * Teros 12 sensors
@@ -101,10 +98,12 @@ Dim V_rf                        'Reference voltage
 Dim V_rf_run                    'Running mean of reference voltage
 Dim V_rf_180                    'Running mean of reference voltage after 180 seconds since the beginning of calibration
 Dim shf_cal_on_f As Boolean     'Set true while calibration is on
-Public shf_wrnng_flg(3) As Boolean 'HFP01SC self-calibration warnings
+Public shf_cal_sdi12_on_f As Boolean 'Set true while calibration is using SW12 power and multiplexer should not be switched
+Public shf_wrnng_flg As Boolean 'HFP01SC self-calibration warnings
+Public shf_wrnng_flg_report As String
 
 Dim i As Long
-Dim truefalse (2) = {"True", "False"} As String*5
+'Dim truefalse (2) = {"True", "False"} As String*5
 
 '***Data Tables
 DataTable(SoilPitDataTable,True,-1)
@@ -149,17 +148,15 @@ DataTable(SoilPitDataTable,True,-1)
   Sample (1, shf_multiplier,  IEEE4)      'Multipliers for soil heat flux plates
   Sample (1, shf_htr_resstnc, IEEE4)      'Heater resistance of self-calibrated soil heat flux plate
   'Warning flag indicates the peformace of self-calibration #1 (see HFP01SC manual v1624)
-  Sample (1, truefalse (2 + shf_wrnng_flg(1)), String)
-  FieldNames ("shfp_wrnng_1_1_1")
-  Sample (1, truefalse (2 + shf_wrnng_flg(2)), String)
-  FieldNames ("shfp_wrnng_2_1_1")
-  Sample (1, truefalse (2 + shf_wrnng_flg(3)), String)
-  FieldNames ("shfp_wrnng_3_1_1")
-EndTable
-
-DataTable(PowerTable,True,-1)
-  DataInterval(0, BATT_CHECK_INTERVAL, Min, 10)
+  'Sample (1, truefalse (2 + shf_wrnng_flg), String)
+  Sample (1, shf_wrnng_flg_report, String)
+  FieldNames ("shfp_wrnng_flg")
+  ' * External battery warning flag
+  'Sample (1, truefalse (2 + btt_wrnng_flg), String)
+  Sample (1, btt_wrnng_flg_report, String)
+  FieldNames ("btt_wrnng_flg")
   Minimum(1,BatterymV,FP2,False,False)
+  ' * Default CR800 data: internal battery and panel temperature
   Minimum(1,BattV,FP2,False,False)
   Average(1,PTemp_C,FP2,False)
 EndTable
@@ -168,42 +165,33 @@ EndTable
 BeginProg
   ' * Main Scan
   Scan(SCAN_INTERVAL,Sec,1,0)
-    If (TimeIntoInterval (1,5,Min)) Then
 
-      '*** Default CR800 Datalogger Battery Voltage measurement 'BattV'
-      Battery(BattV)
-      '*** Default CR800 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
-      PanelTemp(PTemp_C,_50Hz)
-      '*** Battery voltage measurement
-      VoltDiff(BatterymV,1,mV2500,3,True,0,_50Hz,Mult(1),Offs(1))
+    '*** HFP01SC-05 sensor measurements
+    VoltDiff (shf_mV, 1, mV250, PLATE_ANALOG_INPUT, TRUE, 500, 60, 1, 0)
 
-      '*** HFP01SC-05 sensor measurements
-      VoltDiff (shf_mV, 1, mV250, PLATE_ANALOG_INPUT, TRUE, 500, 60, 1, 0)
+    'Apply HFP01SC-05 soil heat flux plate calibration.
+    shf_plate = shf_mV*shf_multiplier
 
-      'Apply HFP01SC-05 soil heat flux plate calibration.
-      shf_plate = shf_mV*shf_multiplier
+    '*** Measure voltage across the heater (V_Rf).
+    VoltDiff (V_rf, 1, mV5000, HEATER_ANALOG_INPUT, TRUE, 500, 60, 0.001, 0)
 
-      '*** Measure voltage across the heater (V_Rf).
-      VoltDiff (V_rf, 1, mV5000, HEATER_ANALOG_INPUT, TRUE, 500, 60, 0.001, 0)
+    'Maintain filtered values for calibration.
+    AvgRun (shf_mV_run, 1, shf_mV, 5)
+    AvgRun (V_rf_run, 1, V_rf, 5)
 
-      'Maintain filtered values for calibration.
-      AvgRun (shf_mV_run, 1, shf_mV, 1)
-      AvgRun (V_rf_run, 1, V_rf, 1)
-    EndIf
-    
     ' *** HFP01SC self-calibration one minute into CAL_INTERVAL.
     If (TimeIntoInterval (1,CAL_INTERVAL,Min)) Then
       shf_cal_on_f = TRUE
+      shf_cal_sdi12_on_f = TRUE
       Move (shf_mV_0, 1, shf_mV_run, 1)
-
       'Turn AM16/32 Multiplexer On
       PortSet(3,1)
       Delay(0,150,mSec)
-      MuxChannelCount=1
-
+      MuxChannelCount = 1
       For i = 1 To 7
         'Switch to next AM16/32 Multiplexer channel
         PulsePort(2,10000)
+        MuxChannelCount=MuxChannelCount+1
       Next i
       'Enable power to SDI-12 Sensors
       SW12(1)
@@ -213,97 +201,116 @@ BeginProg
     If (TimeIntoInterval (230, CAL_INTERVAL*60, Sec)) Then
       Move (shf_mV_170, 1, shf_mV_run, 1)
     EndIf
+    
     ' *** Record voltage output at end of heating cycle and power down heaters.
     If (TimeIntoInterval (4,CAL_INTERVAL,Min)) Then
       Move (shf_mV_180, 1, shf_mV_run, 1)
       Move (V_rf_180,   1, V_rf_run,   1)
       SW12(0)
+      shf_cal_sdi12_on_f = FALSE
+      'Turn AM16/32 Multiplexer Off
+      PortSet(3,0)
+      Delay(0,150,mSec)
+      MuxChannelCount = 0
+      CalibrationCount = CalibrationCount + 1
     EndIf
 
     'End HFP01SC calibration sequence.
-    If (TimeIntoInterval (END_CAL,CAL_INTERVAL,Min)) Then
+    If (TimeIntoInterval (END_CAL_SEQUENCE,CAL_INTERVAL,Min)) Then
       Move (shf_mV_end, 1, shf_mV_run, 1)
       'Compute new HFP01SC calibration factors.
       If (V_rf_180 <> NaN) AND (shf_mV_0 <> NaN) AND (shf_mV_180 <> NaN) Then
         shf_wrnng_flg = FALSE
-
+        shf_wrnng_flg_report = "FALSE"
         'In the following equation 2 means that heat emitts in two directions
-
         shf_multiplier = ((V_rf_180*V_rf_180*shf_htr_resstnc /2/HFP01SC_AREA/HEAT_REF_RSSTNC/HEAT_REF_RSSTNC) _
         /ABS (shf_mV_180-((shf_mV_0+shf_mV_end)/2)))
-
         If ((1000/shf_multiplier < 800/shf_mfct_mult) OR (1000/shf_multiplier > 1050/shf_mfct_mult) _
           OR (ABS(shf_mV_end-shf_mV_0) > 0.1* ABS(shf_mV_180-((shf_mV_0+shf_mV_end)/2))) _
           OR (ABS(shf_mV_180-shf_mV_170) > 0.1 *ABS(shf_mV_180-((shf_mV_0+shf_mV_end)/2)))) Then
           shf_wrnng_flg = TRUE
+          shf_wrnng_flg_report = "TRUE"
           shf_multiplier = shf_mfct_mult
         EndIf
-
       Else
         shf_wrnng_flg = TRUE
+        shf_wrnng_flg_report = "TRUE"
       EndIf
-
       shf_cal_on_f = FALSE
     EndIf
 
-    'Turn AM16/32 Multiplexer Off -to return home!
-    PortSet(3,0)
-    Delay(0,150,mSec)
+    If (shf_cal_sdi12_on_f = FALSE AND TimeIntoInterval (270, DATA_INTERVAL*60, Sec)) Then
+      '*** Redox, Teros 12 and Teros 21 measurements
+      'Turn AM16/32 Multiplexer On
+      PortSet(3,1)
+      Delay(0,150,mSec)
+      MuxChannelCount = 1
+      SubScan(0,uSec,5)
+        'Switch to next AM16/32 Multiplexer channel
+        PulsePort(2,10000) 'delay of 10000 = 10 milliseconds
+        'Redox measurement
+        VoltDiff(Redox(MuxChannelCount),1,mV2500,1,True,0,_50Hz,Mult(MuxChannelCount+1),Offs(MuxChannelCount+1))
+        'Enable power to SDI-12 Sensors
+        SW12(1)
+        'Allow Teros 12 and 21 SDI-12 Sensors to warmup before polling
+        Delay(0,1000,mSec)
+        'Poll Teros 12 SDI-12 Sensor measurements 'CCVWC()', 'Temp_T12()', and 'EC()'
+        SDI12Recorder(Teros12(MuxChannelCount,1),1,"0","M!",1,0)
+        'Poll Teros 21 SDI-12 Sensor measurements 'Matric_potential()', and 'Temp_T21()'
+        SDI12Recorder(Teros21(MuxChannelCount,1),1,"1","M!",1,0)
+        'Disable power to SDI-12 Sensors
+        SW12(0)
+        MuxChannelCount=MuxChannelCount+1
+      NextSubScan
 
-    '*** Redox, Teros 12 and Teros 21 measurements
-    If (TimeIntoInterval (1,5,Min)) Then
-    'Turn AM16/32 Multiplexer On
-    PortSet(3,1)
-    Delay(0,150,mSec)
-    MuxChannelCount=1
+      For Count=1 To 5
+        CCVWC(Count)=Teros12(Count,1)
+        Temp_T12(Count)=Teros12(Count,2)
+        EC(Count)=Teros12(Count,3)
+        Matric_potential(Count)=Teros21(Count,1)
+        Temp_T21(Count)=Teros21(Count,2)
+      Next
 
-    SubScan(0,uSec,5)
+      '*** OTT PLS measurements
       'Switch to next AM16/32 Multiplexer channel
       PulsePort(2,10000)
-      'Redox measurement
-      VoltDiff(Redox(MuxChannelCount),1,mV2500,1,True,0,_50Hz,Mult(MuxChannelCount+1),Offs(MuxChannelCount+1))
-      'Enable power to SDI-12 Sensors
+      'Enable power to OTT PLS sensor
       SW12(1)
-      'Allow Teros 12 and 21 SDI-12 Sensors to warmup before polling
+      'Allow OTT PLS SDI-12 Sensor to warmup before polling
       Delay(0,1000,mSec)
-      'Poll Teros 12 SDI-12 Sensor measurements 'CCVWC()', 'Temp_T12()', and 'EC()'
-      SDI12Recorder(Teros12(MuxChannelCount,1),1,"0","M!",1,0)
-      'Poll Teros 21 SDI-12 Sensor measurements 'Matric_potential()', and 'Temp_T21()'
-      SDI12Recorder(Teros21(MuxChannelCount,1),1,"1","M!",1,0)
-      'Disable power to SDI-12 Sensors
+      'Poll OTT PLS SDI-12 Sensor measurements 'Water_level', and 'Temp_ott_pls'
+      SDI12Recorder(Ottpls(),1,"A","M!",1,0)
+      'Disable power to OTT PLS Sensor
       SW12(0)
       MuxChannelCount=MuxChannelCount+1
-    NextSubScan
+      Water_level=Ottpls(1)
+      Temp_ottpls=Ottpls(2)
 
-    For Count=1 To 5
-      CCVWC(Count)=Teros12(Count,1)
-      Temp_T12(Count)=Teros12(Count,2)
-      EC(Count)=Teros12(Count,3)
-      Matric_potential(Count)=Teros21(Count,1)
-      Temp_T21(Count)=Teros21(Count,2)
-    Next
+      '*** Battery voltage measurement
+      'Switch to next AM16/32 Multiplexer channel
+      PulsePort(2,10000)
+      VoltDiff(BatterymV,1,mV2500,1,True,0,_50Hz,Mult(1),Offs(1))
+      If (BatterymV > 960) Then
+        btt_wrnng_flg = FALSE
+        btt_wrnng_flg_report = "FALSE"
+      Else
+        btt_wrnng_flg = TRUE
+        btt_wrnng_flg_report = "TRUE"
+      EndIf
 
-    '*** OTT PLS measurements
-    'Switch to next AM16/32 Multiplexer channel
-    PulsePort(2,10000)
-    'Enable power to OTT PLS sensor
-    SW12(1)
-    'Allow OTT PLS SDI-12 Sensor to warmup before polling
-    Delay(0,1000,mSec)
-    'Poll OTT PLS SDI-12 Sensor measurements 'Water_level', and 'Temp_ott_pls'
-    SDI12Recorder(Ottpls(),1,"A","M!",1,0)
-    'Disable power to OTT PLS Sensor
-    SW12(0)
+      'Turn AM16/32 Multiplexer Off
+      PortSet(3,0)
+      Delay(0,150,mSec)
+      MuxChannelCount = 0
 
-    Water_level=Ottpls(1)
-    Temp_ottpls=Ottpls(2)
+      '*** Default CR800 Datalogger Battery Voltage measurement 'BattV'
+      Battery(BattV)
 
-    'Turn AM16/32 Multiplexer Off
-    PortSet(3,0)
-    Delay(0,150,mSec)
+      '*** Default CR800 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+      PanelTemp(PTemp_C,_50Hz)
+    EndIf
+
     'Call Data Tables and Store Data
     CallTable SoilPitDataTable
-    CallTable PowerTable
-    EndIf
   NextScan
 EndProg
