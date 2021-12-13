@@ -9,7 +9,7 @@ ConstTable (Constants)
   Const SCAN_INTERVAL      = 10       'Main Scan interval (seconds)
   Const DATA_INTERVAL      = 5        'Interval for data output to table
   Const CAL_SEQUENCE       = 30       'Calibration sequence duration/output interval in minutes.
-  Const CAL_INTERVAL       = 60 '1440     'HFP01SC insitu calibration interval (minutes).
+  Const CAL_INTERVAL       = 1440     'HFP01SC insitu calibration interval (minutes).
   Const END_CAL_SEQUENCE   = CAL_SEQUENCE - 1  'End HFP01SC insitu calibration one minute before end of calibration sequence time.
 
   'Enter sensor sensitivity and heater resistance values as constants.
@@ -191,7 +191,7 @@ BeginProg
       For i = 1 To 7
         'Switch to next AM16/32 Multiplexer channel
         PulsePort(2,10000)
-        MuxChannelCount=MuxChannelCount+1
+        MuxChannelCount = i
       Next i
       'Enable power to SDI-12 Sensors
       SW12(1)
