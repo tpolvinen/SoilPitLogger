@@ -41,7 +41,7 @@ Const HEATER_ANALOG_INPUT = 2   'Starting differential analog input channel in C
 
 '*** Variables
 ' * Used for measurements
-Public shf_plate(3)
+Public shf_plate(1)
 Units  shf_plate = W/m^2
 Public shf_multiplier(1) = {1000/HFP01SC_SNSTVT_1} 'Hold multipliers used in computation
 Units  shf_multiplier    = W/(m^2 mV)
@@ -49,17 +49,17 @@ Dim    shf_mfct_mult(1)  = {1000/HFP01SC_SNSTVT_1} 'Hold manufacture multipliers
 Dim    shf_htr_resstnc(1)= {HFP01SC_RSSTNC_1}                'Array to load heater resistance in ohm
 
 ' * Used for self-calibration
-Dim shf_mV(3)                      'Voltage measured from soil heat flux plates
-Dim shf_mV_run(3)                  'Running mean of shf_mV
-Dim shf_mV_0(3)                    'Running mean of shf_mV at the beginning of calibration
-Dim shf_mV_170(3)                  'Running mean of shf_mV after 170 seconds since the beginning of calibration
-Dim shf_mV_180(3)                  'Running mean of shf_mV after 180 seconds since the beginning of calibration
-Dim shf_mV_end(3)                  'Running mean of shf_mV at the end of calibration
-Dim V_rf(3)                        'Reference voltage
-Dim V_rf_run(3)                    'Running mean of reference voltage
-Dim V_rf_180(3)                    'Running mean of reference voltage after 180 seconds since the beginning of calibration
+Dim shf_mV(1)                      'Voltage measured from soil heat flux plates
+Dim shf_mV_run(1)                  'Running mean of shf_mV
+Dim shf_mV_0(1)                    'Running mean of shf_mV at the beginning of calibration
+Dim shf_mV_170(1)                  'Running mean of shf_mV after 170 seconds since the beginning of calibration
+Dim shf_mV_180(1)                  'Running mean of shf_mV after 180 seconds since the beginning of calibration
+Dim shf_mV_end(1)                  'Running mean of shf_mV at the end of calibration
+Dim V_rf(1)                        'Reference voltage
+Dim V_rf_run(1)                    'Running mean of reference voltage
+Dim V_rf_180(1)                    'Running mean of reference voltage after 180 seconds since the beginning of calibration
 Dim shf_cal_on_f As Boolean        'Set true while calibration is on
-Public shf_wrnng_flg(3) As Boolean 'HFP01SC self-calibration warning   
+Public shf_wrnng_flg(1) As Boolean 'HFP01SC self-calibration warning   
 
 Dim i As Long
 Dim truefalse (2) = {"True", "False"} As String*5
@@ -67,7 +67,7 @@ Dim truefalse (2) = {"True", "False"} As String*5
 DataTable (shf_mean, TRUE, 100)
   DataInterval (0, OUTPUT_INTERVAL, Min, 10)
 
-  Average (3, shf_plate(1),      IEEE4, 0)   'Soil heat flux through a plate  
+  Average (1, shf_plate(1),      IEEE4, 0)   'Soil heat flux through a plate  
 
   Sample (1, shf_multiplier(1),  IEEE4)      'Multipliers for soil heat flux plates
   Sample (1, shf_htr_resstnc(1), IEEE4)      'Heater resistance of self-calibrated soil heat flux plate
@@ -75,10 +75,6 @@ DataTable (shf_mean, TRUE, 100)
   'Warning flag indicates the peformace of self-calibration #1 (see HFP01SC manual v1624) 
   Sample (1, truefalse (2 + shf_wrnng_flg(1)), String)   
   FieldNames ("shfp_wrnng_1_1_1")
-  Sample (1, truefalse (2 + shf_wrnng_flg(2)), String)    
-  FieldNames ("shfp_wrnng_2_1_1")
-  Sample (1, truefalse (2 + shf_wrnng_flg(3)), String)    
-  FieldNames ("shfp_wrnng_3_1_1")
 
 EndTable
 
