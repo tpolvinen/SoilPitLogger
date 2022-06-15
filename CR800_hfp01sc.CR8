@@ -10,14 +10,14 @@
 '*** Contstant Table 
 ConstTable (Constants) 
 '* Measurement constants 
-Const OUTPUT_INTERVAL = 30           'Online mean output interval in minutes.
-Const CAL_INTERVAL    = 1440         'HFP01SC insitu calibration interval (minutes).
+Const OUTPUT_INTERVAL = 5           'Online mean output interval in minutes.
+Const CAL_INTERVAL    = 60         'HFP01SC insitu calibration interval (minutes).
 Const END_CAL = OUTPUT_INTERVAL - 1  'End HFP01SC insitu calibration one minute before the next Output.
 
 'Enter sensor sensitivities and heater resistance values as constants. 
 'These values are unique for each sensor and are listed in the product certificate  
-Const HFP01SC_SNSTVT_1 = 60.80 'Change to your HFP01SC #1 sensitivity (uV/(W/m^2).
-Const HFP01SC_RSSTNC_1 = 96.5  'Change to your HFP01SC #1 heater resistance (ohm).
+Const HFP01SC_SNSTVT_1 = 63.96 'Change to your HFP01SC #1 sensitivity (uV/(W/m^2).
+Const HFP01SC_RSSTNC_1 = 95.8  'Change to your HFP01SC #1 heater resistance (ohm).
 Const HEAT_REF_RSSTNC  = 10.0  'Resistance of heater reference resister (ohm).
 Const HFP01SC_AREA = 3.855e-3  'Area of HFP01SC (m^2).
 EndConstTable
